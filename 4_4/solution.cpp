@@ -33,6 +33,46 @@
 #include <fstream>
 
 /*
+ * Выполнить частичную сортировку относительно опорного элемента.
+ * \param array массив значений
+ * \param beginIdx начальный индекс сортируемого отрезка
+ * \param endIdx конечный индекс сортируемого отрезка
+ * \param pivotIdx индекс опорного элемента
+ * \param k индекс искомой статистики
+ */
+template <typename T> bool partition(T* array, std::size_t& beginIdx, std::size_t& endIdx, const std::size_t& pivotIdx, const std::size_t& k)
+{
+    T pivot = array[pivotIdx];
+    std::swap(array[pivotIdx], array[endIdx]);
+    std::size_t i = endIdx - 1,
+                j = endIdx - 1;
+    for (; j >= beginIdx && j <= endIdx; --j)
+    {
+        if (array[j] > pivot)
+        {
+            std::swap(array[j], array[i]);
+            --i;
+        }
+    }
+    ++i;
+    if (k == i)
+    {
+        return true;
+    }
+    std::swap(array[i], array[endIdx]);
+    if (k < i)
+    {
+        endIdx = i - 1;
+    }
+    else
+    {
+        beginIdx = i + 1;
+    }
+    return false;
+}
+
+
+/*
  * Вычислить k-тую статистику.
  * \param array массив значений
  * \param size размер массива
@@ -42,73 +82,20 @@
 template <typename T> T findKStatistic(T* array, std::size_t size, std::size_t k, std::size_t (*const findPivotIdx)(const T*, std::size_t, std::size_t))
 {
     T* temp = new T[size];
+    std::copy(array, array + size, temp);
+    std::size_t beginIdx = 0;
+    std::size_t endIdx = size - 1;
+    std::size_t pivotIdx = findPivotIdx(temp, beginIdx, endIdx);
 
-    std::size_t pivotIdx = findPivotIdx(array, 0, size - 1);
-    T pivot = array[pivotIdx];
-    std::size_t i;
-    std::size_t j;
-    // первый цикл алгоритма совмещен с заполнением вспомогательного массива:
-    for (i = size - 1, j = size - 1; j < size; --j)
+
+    while (!partition(temp, beginIdx, endIdx, pivotIdx, k))
     {
-        if (array[j] >= pivot)
-        {
-            temp[j] = temp[i];
-            temp[i] = array[j];
-            --i;
-        }
-        else
-        {
-            temp[j] = array[j];
-        }
-    }
-    ++i;
-    if (i == k)
-    {
-        delete[] temp;
-        return pivot;
-    }
-    std::size_t beginIdx;
-    std::size_t endIdx;
-    if (k < i)
-    {
-        beginIdx = 0;
-        endIdx = i - 1;
-    }
-    else
-    {
-        beginIdx = i;
-        endIdx = size - 1;
+        pivotIdx = findPivotIdx(temp, beginIdx, endIdx);
     }
 
-    // Основной рабочий цикл
-    while (k != i)
-    {
-        pivotIdx = findPivotIdx(array, beginIdx, endIdx);
-        pivot = temp[pivotIdx];
-        std::swap(temp[pivotIdx], temp[endIdx]);
-        for (i = endIdx - 1, j = endIdx - 1; j >= beginIdx && j <= endIdx; --j)
-        {
-            if (temp[j] > pivot)
-            {
-                std::swap(temp[j], temp[i]);
-                --i;
-            }
-        }
-        ++i;
-        std::swap(temp[i], temp[endIdx]);
-        if (k < i)
-        {
-            endIdx = i - 1;
-        }
-        else
-        {
-            beginIdx = i + 1;
-        }
-    }
-
+    T result = temp[endIdx];
     delete[] temp;
-
-    return pivot;
+    return result;
 }
 
 /*
