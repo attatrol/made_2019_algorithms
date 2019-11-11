@@ -26,6 +26,8 @@
 
 #include <assert.h>
 #include <algorithm>
+#include <ctime>
+#include <cstdlib>
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
@@ -131,6 +133,7 @@ int main(void) {
         cin >> array[i];
     }
 
+    std::srand(std::time(nullptr));
     unsigned int kStat = findKStatistic(array, count, k, getRandomIdx);
     std::cout << kStat<< std::endl;
 
