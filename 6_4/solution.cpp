@@ -39,108 +39,117 @@ public:
     NaiveTree(): m_head(nullptr)
     {
     }
-    ~NaiveTree()
-    {
-        if (!m_head)
-        {
-            return;
-        }
-        std::stack<Node<T>*> stack;
-        stack.push(m_head);
-        // post-order
-        while (!stack.empty())
-        {
-            Node<T>* top = stack.top();
-            Node<T>* leftChild = top->left;
-            if (leftChild)
-            {
-                top->left = nullptr;
-                stack.push(leftChild);
-            }
-            else
-            {
-                Node<T>* rightChild = stack.top()->right;
-                if (rightChild)
-                {
-                    top->right = nullptr;
-                    stack.push(rightChild);
-                }
-                else
-                {
-                    delete top;
-                    stack.pop();
-                }
-            }
-        }
-    }
-    /*
-     * Вставить элемент
-     */
-    void insert(T&& value)
-    {
-        if (!m_head)
-        {
-            m_head = new Node<T>(std::forward<T>(value));
-            return;
-        }
-        Node<T>* currentNode = m_head;
-        while (true)
-        {
-            if (value <= currentNode->value)
-            {
-                if (currentNode->left == nullptr)
-                {
-                    currentNode->left = new Node<T>(std::forward<T>(value));
-                    return;
-                }
-                else
-                {
-                    currentNode = currentNode->left;
-                }
-            }
-            else
-            {
-                if (currentNode->right == nullptr)
-                {
-                    currentNode->right = new Node<T>(std::forward<T>(value));
-                    return;
-                }
-                else
-                {
-                    currentNode = currentNode->right;
-                }
-            }
-        }
-    }
+    ~NaiveTree();
+    /* Вставить элемент */
+    void insert(T&& value);
     /*
      * Обойти дерево послойно
      * \param visitor колбэк, вызываемый для значения узла
      */
-    void traverseLevelOrder(void (*const visitor)(const T& value))
-    {
-        if (m_head == nullptr)
-        {
-            return;
-        }
-        std::queue<Node<T>*> queue;
-        queue.push(m_head);
-        do
-        {
-            Node<T>* current = queue.front();
-            visitor(current->value);
-            if (current->left)
-            {
-                queue.push(current->left);
-            }
-            if (current->right)
-            {
-                queue.push(current->right);
-            }
-            queue.pop();
-        }
-        while(!queue.empty());
-    }
+    void traverseLevelOrder(void (*const visitor)(const T& value));
 };
+
+template <typename T>
+NaiveTree<T>::~NaiveTree()
+{
+    if (!m_head)
+    {
+        return;
+    }
+    std::stack<Node<T>*> stack;
+    stack.push(m_head);
+    // post-order
+    while (!stack.empty())
+    {
+        Node<T>* top = stack.top();
+        Node<T>* leftChild = top->left;
+        if (leftChild)
+        {
+            top->left = nullptr;
+            stack.push(leftChild);
+        }
+        else
+        {
+            Node<T>* rightChild = stack.top()->right;
+            if (rightChild)
+            {
+                top->right = nullptr;
+                stack.push(rightChild);
+            }
+            else
+            {
+                delete top;
+                stack.pop();
+            }
+        }
+    }
+}
+/*
+ * Вставить элемент
+ */
+template <typename T>
+void NaiveTree<T>::insert(T&& value)
+{
+    if (!m_head)
+    {
+        m_head = new Node<T>(std::forward<T>(value));
+        return;
+    }
+    Node<T>* currentNode = m_head;
+    while (true)
+    {
+        if (value <= currentNode->value)
+        {
+            if (currentNode->left == nullptr)
+            {
+                currentNode->left = new Node<T>(std::forward<T>(value));
+                return;
+            }
+            else
+            {
+                currentNode = currentNode->left;
+            }
+        }
+        else
+        {
+            if (currentNode->right == nullptr)
+            {
+                currentNode->right = new Node<T>(std::forward<T>(value));
+                return;
+            }
+            else
+            {
+                currentNode = currentNode->right;
+            }
+        }
+    }
+}
+
+template <typename T>
+void NaiveTree<T>::traverseLevelOrder(void (*const visitor)(const T& value))
+{
+    if (m_head == nullptr)
+    {
+        return;
+    }
+    std::queue<Node<T>*> queue;
+    queue.push(m_head);
+    do
+    {
+        Node<T>* current = queue.front();
+        visitor(current->value);
+        if (current->left)
+        {
+            queue.push(current->left);
+        }
+        if (current->right)
+        {
+            queue.push(current->right);
+        }
+        queue.pop();
+    }
+    while(!queue.empty());
+}
 
 /*
  * Вывести целое число в стандартный поток вывода
