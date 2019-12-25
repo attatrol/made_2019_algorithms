@@ -13,9 +13,6 @@
 
 #include <algorithm>
 #include <assert.h>
-#ifdef DEBUG
-#include <fstream>
-#endif
 #include <iostream>
 #include <stack>
 #include <unordered_map>
@@ -171,14 +168,6 @@ public:
         {
             nodes_[static_cast<std::size_t>(currentNode)].entry_ = entryCount_++;
         }
-#ifdef DEBUG
-        std::cout << "Added trie pattern " << nodes_[static_cast<std::size_t>(currentNode)].entry_ << '\n';
-        for (std::size_t i = beginIdx; i < endIdx; ++i)
-        {
-            std::cout << pattern[i];
-        }
-        std::cout << std::endl;
-#endif
         return nodes_[static_cast<std::size_t>(currentNode)].entry_;
     }
     /* Add new pattern to the trie, pattern is a whole string */
@@ -199,29 +188,15 @@ public:
       */
     void next(char value, bool* entries, bool& hasEntries)
     {
-        hasEntries = false;
         index_t childIdx;
         assert(currentNode_ >= 0 && currentNode_ < nodes_.size());
-#ifdef DEBUG
-            std::cout << "previous node " << currentNode_ << " (" << nodes_[static_cast<std::size_t>(currentNode_)].value_ << ")\n";
-#endif
         while (-1 == (childIdx = getChildIndex(currentNode_, value)) && currentNode_)
         {
             currentNode_ = getSuffixLink(currentNode_);
-#ifdef DEBUG
-            std::cout << "suffix link move to " << currentNode_ << " (" << nodes_[static_cast<std::size_t>(currentNode_)].value_ << ')';
-#endif
             if (nodes_[static_cast<std::size_t>(currentNode_)].entry_ != TrieNode::NOT_CALCULATED)
             {
-#ifdef DEBUG
-                std::cout << " entry found " << nodes_[static_cast<std::size_t>(currentNode_)].entry_;
-#endif
-                //assert(!entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_]);
                 entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasEntries = true;
             }
-#ifdef DEBUG
-            std::cout << std::endl;
-#endif
         }
         // child was found
         assert(childIdx >= 0 || !currentNode_);
@@ -229,43 +204,20 @@ public:
         {
             currentNode_ = childIdx;
         }
-#ifdef DEBUG
-            std::cout << "child move " << currentNode_ << " (" << nodes_[static_cast<std::size_t>(currentNode_)].value_ << ')';
-#endif
         if (currentNode_)
         {
             if (nodes_[static_cast<std::size_t>(currentNode_)].entry_ != TrieNode::NOT_CALCULATED)
             {
-#ifdef DEBUG
-                std::cout << " entry found " << nodes_[static_cast<std::size_t>(currentNode_)].entry_;
-#endif
-                //assert(!entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_]);
                 entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasEntries = true;
             }
             while ((childIdx = getEntrySuffixLink(childIdx)))
             {
                 if (nodes_[static_cast<std::size_t>(childIdx)].entry_ != TrieNode::NOT_CALCULATED)
                 {
-    #ifdef DEBUG
-                    std::cout << " entry found " << nodes_[static_cast<std::size_t>(childIdx)].entry_;
-    #endif
-                    //assert(!entries[nodes_[static_cast<std::size_t>(childIdx)].entry_]);
                     entries[nodes_[static_cast<std::size_t>(childIdx)].entry_] = hasEntries = true;
                 }
             }
         }
-#ifdef DEBUG
-        else
-        {
-            std::cout << "root encountered";
-        }
-        std::cout << std::endl;
-#endif
-
-    }
-    const TrieNode* getRoot() const
-    {
-        return &nodes_[0];
     }
 };
 
@@ -362,15 +314,6 @@ public:
             wildcardPrefix_ =  size_;
             wildcardPostfix_ = 0;
         }
-#ifdef DEBUG
-        std::cout << "Sequence:\n";
-        std::cout << "wildcardPrefix = " << wildcardPrefix_ << std::endl;
-        for (const auto& token : sequence_)
-        {
-            std::cout << "length = " << token.length_ << " offset = " << token.offset_ << " entry = " << token.entry_ << '\n';
-        }
-        std::cout << "wildcardPostfix = " << wildcardPostfix_ << '\n' << std::endl;
-#endif
     }
 
     /* Search a text for the wildcard pattern */
@@ -400,6 +343,7 @@ public:
         {
             for (std::size_t i = wildcardPrefix_; i < text.size() - wildcardPostfix_; ++i)
             {
+                hasEntries = false;
                 trie_.next(text[i], entries, hasEntries);
                 if (hasEntries)
                 {
@@ -416,9 +360,6 @@ public:
         std::priority_queue<TimerToken> timers;
         for (std::size_t i = wildcardPrefix_; i < text.size() - wildcardPostfix_; ++i)
         {
-#ifdef DEBUG
-            std::cout << "////// " << i << " //////\n";
-#endif
             std::stack<std::size_t> newTokens;
             while (!timers.empty() && timers.top().stringIndex_ == i)
             {
@@ -429,61 +370,30 @@ public:
                     {
                         assert(i >= size_ - wildcardPostfix_);
                         result.push_back(i + wildcardPostfix_ - size_);
-#ifdef DEBUG
-                        std::cout << "full sequence" << std::endl;
-#endif
                     }
                     else
                     {
                         ++sequenceIndex;
                         newTokens.emplace(sequenceIndex);
-#ifdef DEBUG
-                        std::cout << "finished entry = " << timers.top().entry_ << " sequenceIndex = " << (sequenceIndex - 1) << std::endl;
-#endif
                     }
                 }
-#ifdef DEBUG
-                else
-                {
-                    std::cout << "rejected entry " << timers.top().entry_ << " sequenceIndex = " << timers.top().sequenceIndex_ << std::endl;
-                }
-#endif
                 timers.pop();
             }
             while(!newTokens.empty())
             {
                timers.emplace(i + sequence_[newTokens.top()].offset_, sequence_[newTokens.top()].entry_, newTokens.top());
-#ifdef DEBUG
-               std::cout << "sequence registered index = " << i + sequence_[newTokens.top()].offset_ <<
-                            " entry = " << sequence_[newTokens.top()].entry_ << " sequenceIndex = " << newTokens.top() << std::endl;
-#endif
                newTokens.pop();
 
             }
             if (hasEntries)
             {
                 std::fill(entries, entries + sequence_.size(), false);
+                hasEntries = false;
             }
             trie_.next(text[i], entries, hasEntries);
-#ifdef DEBUG
-            if (hasEntries)
-            {
-                for (std::size_t i = 0; i < sequence_.size(); ++i)
-                {
-                    if (entries[i])
-                    {
-                        std::cout << "got entry " << i << '\n';
-                    }
-                }
-            }
-#endif
             if (entries[0])
             {
                 timers.emplace(i + sequence_[1].offset_ + 1, sequence_[1].entry_, 1);
-#ifdef DEBUG
-                std::cout << "Start found, sequence registered index = " << i + sequence_[1].offset_ + 1 <<
-                             " entry = " << sequence_[1].entry_ << " sequenceIndex = " << 1 << std::endl;
-#endif
             }
         }
 
@@ -509,19 +419,11 @@ public:
 int main(void)
 {
     std::string pattern, text;
-#ifdef DEBUG
-    std::ifstream in("input.txt");
-    std::getline(in, pattern);
-    std::getline(in, text);
-#else
     std::iostream::sync_with_stdio(false);
-    std::cin >> pattern;
-    std::cin >> text;
-#endif
+    std::cin >> pattern >> text;
 
     WildcardSearcher searcher(pattern);
     auto result = searcher.search(text);
-
     for (auto index : result)
     {
         std::cout << index << ' ';
