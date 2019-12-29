@@ -18,11 +18,12 @@
 #include <vector>
 
 using coord_t = double;
+//using geo_index_t = short;
 
 struct Point
 {
-    coord_t lat_;
-    coord_t lon_;
+    coord_t x;
+    coord_t y;
 };
 
 constexpr std::size_t calcBoolean(std::size_t searchDepth)
@@ -75,14 +76,18 @@ constexpr TreeInOrderIndex<TSearchDepth>::TreeInOrderIndex() : index {}
 }
 
 template <std::size_t TSearchDepth, std::size_t TCoupledSearchDepth>
-struct GeoHashScale
+class GeoHashScale
 {
-    static constexpr std::size_t TREE_INORDER_INDEX[TSearchDepth] = TreeInOrderIndex<TSearchDepth>();
+public:
+    using GeoHashChildScale = GeoHashScale<TCoupledSearchDepth, TSearchDepth>;
+    static const std::size_t SEARCH_TERMINATED = 0;
+private:
+    static constexpr TreeInOrderIndex TREE_INORDER_INDEX = TreeInOrderIndex<TSearchDepth>();
 
     coord_t min_;
     coord_t max_;
     coord_t scale_[calcScaleSize(TSearchDepth)]; // this is not a linear array but a BST in form of array
-    GeoHashScale<TCoupledSearchDepth, TSearchDepth>* innerScales_[calcBinCount(TSearchDepth)];
+    GeoHashChildScale* innerScales_[calcBinCount(TSearchDepth)];
 
     void calcTips(coord_t start, coord_t end, std::size_t treeIndex)
     {
@@ -95,25 +100,6 @@ struct GeoHashScale
         // recursion depth = TSearchDepth
         calcTips(start, middle, 2 * treeIndex);
         calcTips(middle, end, 2 * treeIndex + 1);
-    }
-
-    short searchBinIndex(coord_t coord) const
-    {
-        short result = 0;
-        while (result <= calcScaleSize(TSearchDepth - 1))
-        {
-            if (scale_[result] < coord)
-            {
-                result *= 2;
-            }
-            else
-            {
-                result = 2 * result + 1;
-            }
-        }
-        result -= calcScaleSize(TSearchDepth - 1);
-        assert(result >= 0 && result < calcBinCount(TSearchDepth));
-        return result;
     }
 
     void buildInnerScale(std::size_t index)
@@ -145,15 +131,9 @@ struct GeoHashScale
             max = scale_[max - 1];
         }
         assert(!innerScales_[index]);
-        innerScales_[index] = new GeoHashScale<TCoupledSearchDepth, TSearchDepth>(min, max);
+        innerScales_[index] = new GeoHashChildScale(min, max);
     }
-    void tryBuildInnerScale(std::size_t index)
-    {
-        if (!innerScales_[index])
-        {
-            buildInnerScale(index);
-        }
-    }
+public:
     GeoHashScale(coord_t min, coord_t max) :
         min_(min), max_(max)
     {
@@ -166,25 +146,88 @@ struct GeoHashScale
     GeoHashScale& operator=(GeoHashScale&&) = delete;
     ~GeoHashScale()
     {
-        delete[] innerScales_;
+        for (std::size_t i = 0; i < calcBinCount(TSearchDepth); ++i)
+        {
+            delete innerScales_[i];
+        }
+    }
+    std::size_t searchBinIndex(coord_t coord) const
+    {
+        assert(coord >= min_ && coord < max_);
+        std::size_t result = 0;
+        while (result <= calcScaleSize(TSearchDepth - 1))
+        {
+            if (scale_[result] < coord)
+            {
+                result *= 2;
+            }
+            else
+            {
+                result = 2 * result + 1;
+            }
+        }
+        result -= calcScaleSize(TSearchDepth - 1);
+        assert(result >= 0 && result < calcBinCount(TSearchDepth));
+        return result;
+    }
+    GeoHashChildScale* operator[](std::size_t index)
+    {
+        if (!innerScales_[index])
+        {
+            buildInnerScale(index);
+        }
+        return innerScales_[index];
     }
 };
 
-template <std::size_t TSearchDepth, std::size_t TComplementSearchDepth>
+template <std::size_t TXSearchDepth, std::size_t TYSearchDepth>
 struct GeoHashBin
 {
-    short latIdx_;
-    short lonIdx_;
-    short depth_;
+    using GeoHashScaleX = GeoHashScale<TXSearchDepth, TYSearchDepth>;
+    using GeoHashScaleY = GeoHashScale<TYSearchDepth, TXSearchDepth>;
+    using GeoHashChildBin = GeoHashBin<TYSearchDepth, TXSearchDepth>;
+
+    const std::size_t SPLIT_BIN_COUNT = 32;
+
+private:
+    const std::size_t xIdx_;
+    const std::size_t yIdx_;
+    const std::size_t depth_;
     std::size_t count_;
 
-    GeoHashScale<TSearchDepth, TComplementSearchDepth>* scale_;
-    GeoHashBin<TComplementSearchDepth, TSearchDepth>* bins_;
-    std::vector<std::size_t>* points_;
+    GeoHashScaleX* scaleX_;
+    GeoHashScaleY* scaleY_;
+    GeoHashChildBin* bins_;
+    std::vector<Point>* points_;
 
-    GeoHashBin(short latIdx, short lonIdx, short depth) :
-        latIdx_(latIdx), lonIdx_(lonIdx), depth_(depth), count_(0), bins_(nullptr), points_(new std::vector<std::size_t>)
+    void addPointNested(Point&& point)
     {
+        assert(bins_);
+        bins_[scaleX_->searchBinIndex(point.x) * calcBinCount(TXSearchDepth) + scaleY_->searchBinIndex(point.y)]->addPoint(point);
+    }
+    void splitHashBin()
+    {
+        assert(points_ && !bins_);
+        bins_ = new GeoHashBin<TYSearchDepth, TXSearchDepth>[calcBinCount(TXSearchDepth) * calcBinCount(TYSearchDepth)];
+        for (std::size_t i = 0; i < calcBinCount(TXSearchDepth); ++i)
+        {
+            for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
+            {
+                bins_[i * calcBinCount(TXSearchDepth) + j] = new GeoHashChildBin(i, j, depth_ + 1, scaleX_[i], scaleY_[j]);
+            }
+        }
+        for (const Point& point : *points_)
+        {
+            addPointNested(point);
+        }
+        delete points_;
+        points_ = nullptr;
+    }
+public:
+    GeoHashBin(std::size_t xIdx, std::size_t yIdx, std::size_t depth, GeoHashScale<TXSearchDepth, TYSearchDepth>* scaleX, GeoHashScale<TYSearchDepth, TXSearchDepth>* scaleY) :
+        xIdx_(xIdx), yIdx_(yIdx), depth_(depth), count_(0), scaleX_(scaleX), scaleY_(scaleY), bins_(nullptr), points_(new std::vector<Point>)
+    {
+        assert(scaleX && scaleY);
     }
     GeoHashBin(const GeoHashBin&) = delete;
     GeoHashBin& operator=(const GeoHashBin&) = delete;
@@ -195,12 +238,148 @@ struct GeoHashBin
         delete[] bins_;
         delete points_;
     }
+    void addPoint(Point&& point)
+    {
+        ++count_;
+        if (points_)
+        {
+            points_->push_back(point); // forward is unnecessary beacuse of small size
+            if (count_ >= SPLIT_BIN_COUNT)
+            {
+                splitHashBin();
+            }
+        }
+        else
+        {
+            addPointNested(point);
+        }
+    }
+    std::size_t getCount() const
+    {
+        return count_;
+    }
+    //
+    //    5_____________4___________3
+    //    |                         |
+    //    |                         |
+    //    |                         |
+    //   6|                         | 2
+    //    |                         |
+    //    |                         |
+    //    |                         |
+    //    7-------------------------1
+    //               0
+    //
+
+    /* Get count of all points that are lesser than X coord (4) */
+    std::size_t getCount_ltX(coord_t coord) const
+    {
+        std::size_t result = 0;
+        if (points_)
+        {
+            for (const Point& point : points_)
+            {
+                if (point.x < coord)
+                {
+                    ++result;
+                }
+            }
+        }
+        else
+        {
+            std::size_t index = scaleX_->searchBinIndex(coord);
+            for (std::size_t i = 0; i < index; ++i)
+            {
+                for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
+                {
+                    result += bins_[i * calcBinCount(TXSearchDepth) + j]->getCount();
+                }
+            }
+            for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
+            {
+                result += bins_[index * calcBinCount(TXSearchDepth) + j]->getCount_ltX(coord);
+            }
+        }
+        return result;
+    }
+    /* Get count of all points that are greater or equal than X coord (0) */
+    std::size_t getCount_gteX(coord_t coord) const
+    {
+        std::size_t result = 0;
+        if (points_)
+        {
+            for (const Point& point : points_)
+            {
+                if (point.x >= coord)
+                {
+                    ++result;
+                }
+            }
+        }
+        else
+        {
+            std::size_t index = scaleX_->searchBinIndex(coord);
+            for (std::size_t i = index + 1; i < calcBinCount(TYSearchDepth); ++i)
+            {
+                for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
+                {
+                    result += bins_[i * calcBinCount(TXSearchDepth) + j]->getCount();
+                }
+            }
+            for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
+            {
+                result += bins_[index * calcBinCount(TXSearchDepth) + j]->getCount_gteX(coord);
+            }
+        }
+        return result;
+    }
+    /* Get count of all points that are lesser than Y coord (2) */
+    std::size_t getCount_ltY(coord_t coord) const
+    {
+
+    }
+    /* Get count of all points that are greater or equal than Y coord (6) */
+    std::size_t getCount_gteY(coord_t coord) const
+    {
+
+    }
+    /* Get count of all points that are lesser than X coord and lesser than Y coord (3) */
+    std::size_t getCount_ltX_ltY(const Point& point) const
+    {
+
+    }
+    /* Get count of all points that are greater or equal than X coord and greater or equal than Y coord (7) */
+    std::size_t getCount_gteX_gteY(const Point& point) const
+    {
+
+    }
+    /* Get count of all points that are lesser than X coord and greater or equal than Y coord (2) */
+    std::size_t getCount_ltX_gteY(const Point& point) const
+    {
+
+    }
+    /* Get count of all points that are greater or equal than X coord and lesser than Y coord (2) */
+    std::size_t getCount_gteX_ltY(const Point& point) const
+    {
+
+    }
 };
 
-//class GeoHash
-//{
-//    GeoHashBin
-//};
+class GeoHash
+{
+private:
+    const coord_t minX_;
+    const coord_t maxX_;
+    const coord_t minY_;
+    const coord_t maxY_;
+public:
+    GeoHash(coord_t minX, coord_t maxX, coord_t minY, coord_t maxY) :
+        minX_(minX), maxX_(maxX), minY_(minY), maxY_(maxY)
+    {
+
+    }
+
+};
 
 constexpr TreeInOrderIndex<2> x;
 
