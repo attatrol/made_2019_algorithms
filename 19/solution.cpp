@@ -12,21 +12,13 @@
  * Для решения задачи необходимо реализовать алгоритм “Geohashing”.
  */
 
-#define DEBUG
-
 #include <algorithm>
 #include <assert.h>
 #include <iostream>
 #include <stack>
 #include <vector>
 
-#ifdef DEBUG
-#include <fstream>
-#include <random>
-#endif
-
 using coord_t = double;
-//using geo_index_t = short;
 
 /* 2D point */
 struct Point
@@ -513,95 +505,27 @@ std::size_t GeoHash::getCountInRect(const Point& minPoint, const Point& maxPoint
      }
 }
 
-#ifdef DEBUG
-coord_t fRand(coord_t fMin, coord_t fMax)
-{
-    coord_t f = (coord_t)rand() / RAND_MAX;
-    return fMin + f * (fMax - fMin);
-}
-Point generatePoint()
-{
-    return Point(fRand(-180., 180.), fRand(-9, 90));
-}
-std::pair<Point, Point> generateRect()
-{
-    coord_t x0 = fRand(-200., 200.);
-    coord_t x1 = fRand(-200., 200.);
-    coord_t y0 = fRand(-100., 100.);
-    coord_t y1 = fRand(-100., 100.);
-    return std::make_pair(Point(std::min(x0, x1), std::min(y0, y1)), Point(std::max(x0, x1), std::max(y0, y1)));
-}
-void generateTestData(std::size_t pointCount, std::size_t rectCount)
-{
-    std::ofstream out("input_test.txt");
-    out << pointCount << '\n';
-    for (std::size_t i = 0; i < pointCount; ++i)
-    {
-        Point point = generatePoint();
-        out << point.x << " " << point.y << '\n';
-    }
-    out << rectCount << '\n';
-    for (std::size_t i = 0; i < rectCount; ++i)
-    {
-        auto rect = generateRect();
-        out << rect.first.x << ' ' << rect.first.y << ' ' << rect.second.x << ' ' << rect.second.y << '\n';
-    }
-}
-#endif
-
 int main(void)
 {
     GeoHash geoHash(-180, 180, -90, 90);
 
-#ifdef DEBUG
-    std::ifstream cin("input_test.txt");
-#else
-    using std::cin;
-#endif
     std::size_t pointCount;
-    cin >> pointCount;
-#ifdef DEBUG
-    std::cout << "calcBinCount(2) " << calcBinCount(2) << '\n';
-    std::cout << "calcBinCount(3) " << calcBinCount(3) << '\n';
-    std::vector<Point> testPoints;
-    testPoints.reserve(pointCount);
-#endif
+    std::cin >> pointCount;
     for (std::size_t i = 0; i < pointCount; ++i)
     {
         coord_t x, y;
-        cin >> x >> y;
+        std::cin >> x >> y;
         geoHash.addPoint(Point(x, y));
-#ifdef DEBUG
-        testPoints.emplace_back(x, y);
-#endif
     }
     std::size_t rectCount;
-    cin >> rectCount;
+    std::cin >> rectCount;
     for (std::size_t i = 0; i < rectCount; ++i)
     {
         coord_t xMin, xMax, yMin, yMax;
-        cin >> xMin >> yMin >> xMax >> yMax;
+        std::cin >> xMin >> yMin >> xMax >> yMax;
         std::size_t pointCount = geoHash.getCountInRect(Point(xMin, yMin), Point(xMax, yMax));
-#ifdef DEBUG
-        std::size_t testCount = 0;
-        for (const Point& point : testPoints)
-        {
-            if (point.x >= xMin && point.x < xMax && point.y >= yMin && point.y < yMax)
-            {
-                ++testCount;
-            }
-        }
-        assert(pointCount == testCount);
-#endif
         std::cout << pointCount << '\n';
     }
-
-    //generateTestData(10000, 10000);
-
-//    TreeInOrderIndex<1> t1;
-//    TreeInOrderIndex<2> t2;
-//    TreeInOrderIndex<3> t3;
-//    TreeInOrderIndex<4> t4;
 
     return 0;
 }
