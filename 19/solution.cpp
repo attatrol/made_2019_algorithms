@@ -136,13 +136,9 @@ private:
     /* Determines the number of points that causes division of the cell */
     const std::size_t SPLIT_BIN_COUNT = 32;
 
-    std::size_t xIdx_;  // X coordinate in the parent, part of geocode value
-    std::size_t yIdx_;  // Y coordinate in the parent, part of geocode value
-    std::size_t depth_; // length of the path to the root cell
-    std::size_t count_; // number of values in the cell
-
     GeoHashScaleX* scaleX_;      // link to the scale for children X coordinate indexing
     GeoHashScaleY* scaleY_;      // link to the scale for children Y coordinate indexing
+    std::size_t count_;          // number of values in the cell
     GeoHashChildCell* cells_;    // child cells
     std::vector<Point>* points_; // current points, either this or cells_ are present at one time
     /* Add point to the child cells */
@@ -151,7 +147,7 @@ private:
     void splitHashBin();
 public:
     GeoHashCell();
-    GeoHashCell(std::size_t xIdx, std::size_t yIdx, std::size_t depth, GeoHashScaleX* scaleX, GeoHashScaleY* scaleY);
+    GeoHashCell(GeoHashScaleX* scaleX, GeoHashScaleY* scaleY);
     GeoHashCell(const GeoHashCell&) = delete;
     GeoHashCell& operator=(const GeoHashCell&) = delete;
     GeoHashCell(GeoHashCell&&) = delete;
@@ -292,7 +288,7 @@ void GeoHashCell<TXSearchDepth, TYSearchDepth>::splitHashBin()
     {
         for (std::size_t j = 0; j < calcBinCount(TYSearchDepth); ++j)
         {
-            cells_[i * calcBinCount(TYSearchDepth) + j] = GeoHashChildCell(i, j, depth_ + 1, scaleX_->getChildScale(i), scaleY_->getChildScale(j));
+            cells_[i * calcBinCount(TYSearchDepth) + j] = GeoHashChildCell(scaleX_->getChildScale(i), scaleY_->getChildScale(j));
         }
     }
     for (const Point& point : *points_)
@@ -308,8 +304,8 @@ GeoHashCell<TXSearchDepth, TYSearchDepth>::GeoHashCell():
 {
 }
 template <std::size_t TXSearchDepth, std::size_t TYSearchDepth>
-GeoHashCell<TXSearchDepth, TYSearchDepth>::GeoHashCell(std::size_t xIdx, std::size_t yIdx, std::size_t depth, GeoHashScaleX* scaleX, GeoHashScaleY* scaleY) :
-    xIdx_(xIdx), yIdx_(yIdx), depth_(depth), count_(0), scaleX_(scaleX), scaleY_(scaleY), cells_(nullptr), points_(new std::vector<Point>)
+GeoHashCell<TXSearchDepth, TYSearchDepth>::GeoHashCell(GeoHashScaleX* scaleX, GeoHashScaleY* scaleY) :
+    scaleX_(scaleX), scaleY_(scaleY), count_(0), cells_(nullptr), points_(new std::vector<Point>)
 {
     assert(scaleX && scaleY);
 }
@@ -318,11 +314,7 @@ GeoHashCell<TXSearchDepth, TYSearchDepth>& GeoHashCell<TXSearchDepth, TYSearchDe
 {
     if (&other != this)
     {
-        xIdx_ = other.xIdx_;
-        yIdx_ = other.yIdx_;
-        depth_ = other.depth_;
         count_ = other.count_;
-
         scaleX_ = other.scaleX_;
         scaleY_ = other.scaleY_;
         std::swap(cells_, other.cells_);
@@ -476,7 +468,7 @@ std::size_t GeoHashCell<TXSearchDepth, TYSearchDepth>::getCountInRect(const Poin
 }
 
 GeoHash::GeoHash(coord_t minX, coord_t maxX, coord_t minY, coord_t maxY) :
-    minX_(minX), maxX_(maxX), minY_(minY), maxY_(maxY), xtips_(minX, maxX), ytips_(minY, maxY), root_(0, 0, 0, &xtips_, &ytips_)
+    minX_(minX), maxX_(maxX), minY_(minY), maxY_(maxY), xtips_(minX, maxX), ytips_(minY, maxY), root_(&xtips_, &ytips_)
 {
 }
 void GeoHash::addPoint(const Point& point)
