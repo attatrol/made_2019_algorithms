@@ -4,7 +4,7 @@
  * Вариант 2. С помощью z-функции.
  */
 
-
+#include <assert.h>
 #include <algorithm>
 #include <iostream>
 #include <vector>
@@ -24,8 +24,9 @@ std::vector<std::size_t> findSubstrings(const std::string& substring, const std:
         return result;
     }
 
-    std::vector<std::size_t> zFn(substringLength + inputLength);
-    zFn[0] = 0;
+    std::vector<std::size_t> zFn;
+    zFn.reserve(substringLength);
+    zFn.push_back(0);
     std::size_t left = 0, right = 0;
 
     // 1. classic z function calculation for the substring
@@ -49,11 +50,12 @@ std::vector<std::size_t> findSubstrings(const std::string& substring, const std:
             left = i;
             right = i + zFnI;
         }
-        zFn[i] = zFnI;
+        zFn.push_back(zFnI);
     }
 
     // 2. z function calculation for the input string:
     // keep in mind that the substring precedes the input thus indexes are modified:
+    left = right = 0;
     for (std::size_t i = 0; i < inputLength; ++i)
     {
         std::size_t zFnI;
@@ -63,6 +65,7 @@ std::vector<std::size_t> findSubstrings(const std::string& substring, const std:
         }
         else
         {
+            assert(i + substringLength - left < substringLength);
             zFnI = std::min(right - i - substringLength, zFn[i + substringLength - left]);
         }
         while (zFnI < substringLength && i + zFnI < inputLength && substring[zFnI] == input[i + zFnI])
@@ -74,7 +77,6 @@ std::vector<std::size_t> findSubstrings(const std::string& substring, const std:
             left = i + substringLength;
             right = i + substringLength + zFnI;
         }
-        zFn[i + substringLength] = zFnI;
         //std::cout << i << " : " << zFnI << '\n';
         if (zFnI == substringLength)
         {
