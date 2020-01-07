@@ -30,62 +30,34 @@ private:
     {
         static const index_t NOT_CALCULATED = -1;
 
-        char value_;                                  // value
-        index_t parent_;                              // index of the parent node
-        std::unordered_map<char, index_t>* children_; // map value -> child index
-        index_t suffixLink_;                          // link to the node which path has the largest common suffix with this node path
-        index_t entrySuffixLink_;                     // link in the sequence of suffix links that leads to the first node that has en entry
-        index_t entry_;                               // entry, index of a pattern that ends with this node
+        char value_;                                 // value
+        index_t parent_;                             // index of the parent node
+        std::unordered_map<char, index_t> children_; // map value -> child index
+        index_t suffixLink_;                         // link to the node which path has the largest common suffix with this node path
+        index_t entrySuffixLink_;                    // link in the sequence of suffix links that leads to the first node that has en entry
+        index_t entry_;                              // entry, index of a pattern that ends with this node
 
         TrieNode():
-            children_(nullptr), suffixLink_(NOT_CALCULATED), entrySuffixLink_(NOT_CALCULATED), entry_(NOT_CALCULATED)
+            suffixLink_(NOT_CALCULATED), entrySuffixLink_(NOT_CALCULATED), entry_(NOT_CALCULATED)
         {
         }
         TrieNode(char value, index_t parent):
-            value_(value), parent_(parent), children_(nullptr), suffixLink_(NOT_CALCULATED), entrySuffixLink_(NOT_CALCULATED), entry_(NOT_CALCULATED)
+            value_(value), parent_(parent), suffixLink_(NOT_CALCULATED), entrySuffixLink_(NOT_CALCULATED), entry_(NOT_CALCULATED)
         {
-        }
-        TrieNode(const TrieNode&) = delete;
-        TrieNode& operator=(const TrieNode&) = delete;
-        TrieNode(TrieNode&& other) noexcept :
-            value_(other.value_), parent_(other.parent_), children_(nullptr), suffixLink_(other.suffixLink_), entrySuffixLink_(other.entrySuffixLink_), entry_(other.entry_)
-        {
-            std::swap(other.children_, children_);
-        }
-        TrieNode& operator=(TrieNode&& other) noexcept
-        {
-            if (&other != this)
-            {
-                value_ = other.value_;
-                parent_ = other.parent_;
-                std::swap(other.children_, children_);
-                suffixLink_ = other.suffixLink_;
-                entrySuffixLink_ = other.entrySuffixLink_;
-                entry_ = other.entry_;
-            }
-            return *this;
-        }
-        ~TrieNode()
-        {
-            delete children_;
         }
     };
 
-    std::vector<TrieNode> nodes_;                  // tree nodes
-    index_t entryCount_;
-    index_t currentNode_;
+    std::vector<TrieNode> nodes_; // tree nodes
+    index_t entryCount_;          // number of registered patterns
+    index_t currentNode_;         // index of the current node
 
     /* Get index of a child node by its value and the parent node index */
-    index_t getChildIndex(index_t nodeIdx, char childValue)
+    index_t getChildIndex(index_t nodeIdx, char childValue) const
     {
         assert(nodeIdx >= 0 && nodeIdx < nodes_.size());
-        TrieNode& node = nodes_[static_cast<std::size_t>(nodeIdx)];
-        if (!node.children_)
-        {
-            return -1l;
-        }
-        auto found = node.children_->find(childValue);
-        return found == node.children_->end() ? -1l : found->second;
+        const TrieNode& node = nodes_[static_cast<std::size_t>(nodeIdx)];
+        auto found = node.children_.find(childValue);
+        return found == node.children_.end() ? -1l : found->second;
     }
     /* Add child node */
     index_t addChild(index_t parentNodeIdx, char childValue)
@@ -93,12 +65,8 @@ private:
         assert(parentNodeIdx >= 0 && parentNodeIdx < nodes_.size());
         assert(getChildIndex(parentNodeIdx, childValue) < 0);
         TrieNode& parentNode = nodes_[static_cast<std::size_t>(parentNodeIdx)];
-        if (!parentNode.children_)
-        {
-            parentNode.children_ = new std::unordered_map<char, index_t>();
-        }
         index_t result = static_cast<index_t>(nodes_.size());
-        parentNode.children_->insert({childValue, nodes_.size()});
+        parentNode.children_.insert({childValue, nodes_.size()});
         nodes_.emplace_back(childValue, parentNodeIdx);
         return result;
     }
@@ -114,7 +82,9 @@ private:
         {
             return 0;
         }
-        return getNext(getSuffixLink(nodeIdx), value);
+        index_t result = getNext(getSuffixLink(nodeIdx), value);
+        addChild(result, value);
+        return result;
     }
     /* Get node suffix link */
     index_t getSuffixLink(index_t nodeIdx)
@@ -183,10 +153,10 @@ public:
     /**
       * Push next value to the heap
       * \param value next char from the text
-      * \param entries bool array where encountered entries are registered
-      * \param hasEntries flag, is true if any entry was encountered
+      * \param matches bool array where encountered matches are registered
+      * \param hasMatches flag, is true if any entry was encountered
       */
-    void next(char value, bool* entries, bool& hasEntries)
+    void next(char value, bool* matches, bool& hasMatches)
     {
         index_t childIdx;
         assert(currentNode_ >= 0 && currentNode_ < nodes_.size());
@@ -195,7 +165,7 @@ public:
             currentNode_ = getSuffixLink(currentNode_);
             if (nodes_[static_cast<std::size_t>(currentNode_)].entry_ != TrieNode::NOT_CALCULATED)
             {
-                entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasEntries = true;
+                matches[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasMatches = true;
             }
         }
         // child was found
@@ -208,13 +178,13 @@ public:
         {
             if (nodes_[static_cast<std::size_t>(currentNode_)].entry_ != TrieNode::NOT_CALCULATED)
             {
-                entries[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasEntries = true;
+                matches[nodes_[static_cast<std::size_t>(currentNode_)].entry_] = hasMatches = true;
             }
             while ((childIdx = getEntrySuffixLink(childIdx)))
             {
                 if (nodes_[static_cast<std::size_t>(childIdx)].entry_ != TrieNode::NOT_CALCULATED)
                 {
-                    entries[nodes_[static_cast<std::size_t>(childIdx)].entry_] = hasEntries = true;
+                    matches[nodes_[static_cast<std::size_t>(childIdx)].entry_] = hasMatches = true;
                 }
             }
         }
@@ -274,13 +244,14 @@ public:
     explicit WildcardSearcher(const std::string& pattern):
         size_(pattern.size())
     {
-        std::size_t i, offsetStart, patternStart;
-        bool readingPattern = pattern[0] != WILDCARD_SYMBOL;
-        offsetStart = 0;
+        std::size_t offsetStart = 0;  // end index of the previous pattern
+        std::size_t patternStart;     // start index of current pattern
+        bool readingPattern = pattern[0] != WILDCARD_SYMBOL; // true, if the last symbol is not a wildcard
         if (readingPattern)
         {
             patternStart = 0;
         }
+        std::size_t i;
         for (i = 0; i < size_; ++i)
         {
             bool isPatternChar = pattern[i] != WILDCARD_SYMBOL;
@@ -297,19 +268,20 @@ public:
                 readingPattern = false;
             }
         }
-        if (readingPattern)
+        // all characters were processed, there are 3 possible outcomes
+        if (readingPattern) // in the end is a pattern, put it into the trie
         {
             long trieEntryIndex = trie_.addPattern(pattern, patternStart, size_);
             sequence_.emplace_back(size_ - offsetStart, size_ - patternStart, trieEntryIndex);
             wildcardPrefix_ = sequence_[0].offset_ - sequence_[0].length_;
             wildcardPostfix_ = 0;
         }
-        else if (sequence_.size())
+        else if (sequence_.size()) // in the end are some wildcards
         {
             wildcardPrefix_ =  sequence_[0].offset_ - sequence_[0].length_;
             wildcardPostfix_ = size_ - offsetStart;
         }
-        else
+        else // all pattern consists of wildcards
         {
             wildcardPrefix_ =  size_;
             wildcardPostfix_ = 0;
@@ -317,7 +289,7 @@ public:
     }
 
     /* Search a text for the wildcard pattern */
-    std::vector<std::size_t>search(const std::string& text)
+    std::vector<std::size_t> search(const std::string& text)
     {
         std::vector<std::size_t> result;
         if (text.size() < size_)
@@ -335,35 +307,36 @@ public:
 
         trie_.init();
         auto initialEntry = sequence_[0];
-        bool hasEntries = false;
-        bool* entries = new bool[sequence_.size()];
-        std::fill(entries, entries + sequence_.size(), false);
+        bool hasMatches = false;
+        bool* matches = new bool[sequence_.size()];
+        std::fill(matches, matches + sequence_.size(), false);
 
         if (sequence_.size() == 1)
         {
             for (std::size_t i = wildcardPrefix_; i < text.size() - wildcardPostfix_; ++i)
             {
-                hasEntries = false;
-                trie_.next(text[i], entries, hasEntries);
-                if (hasEntries)
+                hasMatches = false;
+                trie_.next(text[i], matches, hasMatches);
+                if (hasMatches)
                 {
                     result.push_back(i + 1 - initialEntry.length_ - wildcardPrefix_);
-                    entries[0] = false;
+                    matches[0] = false;
                 }
             }
 
-            delete[] entries;
+            delete[] matches;
 
             return result; // there is a single pattern in the trie
         }
 
-        std::priority_queue<TimerToken> timers;
+        std::priority_queue<TimerToken> timers; // priority queue for patterns, expected to be finished at certain position in future
         for (std::size_t i = wildcardPrefix_; i < text.size() - wildcardPostfix_; ++i)
         {
-            std::stack<std::size_t> newTokens;
+            // 0. check if there are any expected patterns at symbol (i - 1)
+            std::stack<std::size_t> newTimers; // new items for the timer queue
             while (!timers.empty() && timers.top().stringIndex_ == i)
             {
-                if (entries[timers.top().entry_])
+                if (matches[timers.top().entry_])
                 {
                     std::size_t sequenceIndex = timers.top().sequenceIndex_;
                     if (sequenceIndex == sequence_.size() - 1)
@@ -374,30 +347,33 @@ public:
                     else
                     {
                         ++sequenceIndex;
-                        newTokens.emplace(sequenceIndex);
+                        newTimers.emplace(sequenceIndex);
                     }
                 }
                 timers.pop();
             }
-            while(!newTokens.empty())
+            // 1. put next expected patterns in the queue
+            while(!newTimers.empty())
             {
-               timers.emplace(i + sequence_[newTokens.top()].offset_, sequence_[newTokens.top()].entry_, newTokens.top());
-               newTokens.pop();
+               timers.emplace(i + sequence_[newTimers.top()].offset_, sequence_[newTimers.top()].entry_, newTimers.top());
+               newTimers.pop();
 
             }
-            if (hasEntries)
+            // 2. check the trie if there are any matches
+            if (hasMatches)
             {
-                std::fill(entries, entries + sequence_.size(), false);
-                hasEntries = false;
+                std::fill(matches, matches + sequence_.size(), false);
+                hasMatches = false;
             }
-            trie_.next(text[i], entries, hasEntries);
-            if (entries[0])
+            trie_.next(text[i], matches, hasMatches);
+            if (matches[0])
             {
                 timers.emplace(i + sequence_[1].offset_ + 1, sequence_[1].entry_, 1);
             }
         }
 
-        if (entries[timers.top().entry_])
+        // process the terminal matches
+        if (matches[timers.top().entry_])
         {
             while (!timers.empty() && timers.top().stringIndex_ == text.size() - wildcardPostfix_)
             {
@@ -410,7 +386,7 @@ public:
             }
         }
 
-        delete[] entries;
+        delete[] matches;
 
         return result;
     }
@@ -420,6 +396,7 @@ int main(void)
 {
     std::string pattern, text;
     std::iostream::sync_with_stdio(false);
+
     std::cin >> pattern >> text;
 
     WildcardSearcher searcher(pattern);
